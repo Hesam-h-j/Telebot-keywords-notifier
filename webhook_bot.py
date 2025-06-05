@@ -1,16 +1,17 @@
-import nest_asyncio
-nest_asyncio.apply()
 import os
+import nest_asyncio
 from fastapi import FastAPI, Request
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, ContextTypes
+
+nest_asyncio.apply()
 
 TOKEN = os.environ["TOKEN"]
 keyword = "hello"
 waiting_for_keyword = set()
 
 app = FastAPI()
-bot_app = None  # will be initialized in startup event
+bot_app = None  # initialized on startup
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f'Bot is active. Current keyword: "{keyword}"')
@@ -38,14 +39,16 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @app.on_event("startup")
 async def on_startup():
     global bot_app
-    bot_app = ApplicationBuilder().token(TOKEN).build()
+    bot_app = Application.builder().token(TOKEN).build()
     bot_app.add_handler(CommandHandler('start', start))
     bot_app.add_handler(CommandHandler('setkeyword', set_keyword))
+    from telegram.ext import MessageHandler, filters
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_message))
 
 @app.post(f"/{TOKEN}/")
 async def webhook(request: Request):
+    global bot_app
     data = await request.json()
     update = Update.de_json(data, bot_app.bot)
     await bot_app.process_update(update)
-    return "ok"
+    return {"ok": True}
